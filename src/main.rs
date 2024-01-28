@@ -8,19 +8,19 @@ mod utils;
 mod payloads;
 
 use tokio::net::{ UdpSocket};
-use std::{io, vec};
+use std::{io};
 use std::str;
 
 use ezsockets::Server;
 
-use serde::Serialize;
+
 
 use crate::config::Config;
 use crate::payloads::{create_conn_payload, create_pong_payload};
 use crate::utils::decode_callsign;
 use crate::websocket::{M17ClientServer, WS_SESSIONS, WsPayload};
 
-use envconfig::{Envconfig, Error};
+use envconfig::{Envconfig};
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
