@@ -3,7 +3,7 @@ LABEL authors="oe3anc"
 
 RUN mkdir "app"
 WORKDIR /app
-COPY ./target/debug/m17rx /app/m17rx
+COPY ./target/debug/m17web-proxy /app/m17web-proxy
 
-ENTRYPOINT ["/app/m17rx"]
+ENTRYPOINT ["/app/m17web-proxy"]
 
