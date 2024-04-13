@@ -18,7 +18,9 @@
 
 ### Docker
 ```
-docker run -d --name m17web-proxy \
+docker build -t m17web-proxy .
+
+docker run -dp 3000:3000 --name m17web-proxy \
   -e M17WEB_PROXY_CALLSIGN=N0CALL \
-  -e M17WEB_PROXY_LISTENER=localhost:17000
+  -e M17WEB_PROXY_REFLECTOR=localhost:17000 m17web-proxy
 ```
