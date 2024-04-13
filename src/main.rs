@@ -1,7 +1,3 @@
-#![feature(iter_collect_into)]
-#![feature(ascii_char)]
-#![feature(slice_pattern)]
-
 mod config;
 mod websocket;
 mod utils;
