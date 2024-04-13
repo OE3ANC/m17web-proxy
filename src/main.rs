@@ -9,8 +9,6 @@ use std::str;
 
 use ezsockets::Server;
 
-
-
 use crate::config::Config;
 use crate::payloads::{create_conn_payload, create_pong_payload};
 use crate::utils::decode_callsign;
