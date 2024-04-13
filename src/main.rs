@@ -10,7 +10,7 @@ use std::str;
 use ezsockets::Server;
 
 use crate::config::Config;
-use crate::payloads::{create_conn_payload, create_pong_payload};
+use crate::payloads::{create_conn_payload,create_lstn_payload, create_pong_payload};
 use crate::utils::decode_callsign;
 use crate::websocket::{M17ClientServer, WS_SESSIONS, WsPayload};
 
@@ -35,7 +35,8 @@ async fn main() -> io::Result<()> {
     // RX Buffer -> 128 bytes should be more than enough -> Spec says 54 bytes
     let mut buf = [0; 128];
 
-    let conn_payload = create_conn_payload(cfg.callsign.clone(), cfg.reflector_target_module);
+    // TODO -> Config switch for LSTN connect packed
+    let conn_payload = create_lstn_payload(cfg.reflector_target_module);
 
     let len = sock_udp.send(&conn_payload).await?;
 
@@ -98,3 +99,4 @@ async fn main() -> io::Result<()> {
     }
     // TODO -> Disconnect when closed!
 }
+// {"src_call":"<decoded src call>","dest_call":"<decoded dst call>","c2_stream":<Codec2 stream as [u8]>,"done":<Last Packet bool>}
