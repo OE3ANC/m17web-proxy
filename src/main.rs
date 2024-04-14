@@ -10,15 +10,19 @@ use std::str;
 use ezsockets::Server;
 
 use crate::config::Config;
-use crate::payloads::{create_conn_payload,create_lstn_payload, create_pong_payload};
-use crate::utils::decode_callsign;
+use crate::payloads::{create_conn_payload, create_pong_payload};
+use crate::utils::{decode_callsign, encode_callsign, generate_lstn_call};
 use crate::websocket::{M17ClientServer, WS_SESSIONS, WsPayload};
 
 use envconfig::{Envconfig};
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    let cfg = Config::init_from_env().unwrap();
+    let mut cfg = Config::init_from_env().unwrap();
+
+    let call = generate_lstn_call();
+    let conn_method = "LSTN".to_string();
+
     println!("Startup with config: {:?}", cfg);
     // WS Server instance
     let (server, _) = Server::create(|_server| M17ClientServer {});
@@ -35,8 +39,7 @@ async fn main() -> io::Result<()> {
     // RX Buffer -> 128 bytes should be more than enough -> Spec says 54 bytes
     let mut buf = [0; 128];
 
-    // TODO -> Config switch for LSTN connect packed
-    let conn_payload = create_lstn_payload(cfg.reflector_target_module);
+    let conn_payload = create_conn_payload(conn_method, call.clone(), cfg.reflector_target_module);
 
     let len = sock_udp.send(&conn_payload).await?;
 
@@ -60,7 +63,7 @@ async fn main() -> io::Result<()> {
             "NACK" => println!("We got refused"), // Ignored for now -> mrefd sends ping anyway
             "PING" => {
                 println!("We got a PING! Sending PONG...");
-                sock_udp.send(create_pong_payload(cfg.callsign.clone()).as_slice()).await?;
+                sock_udp.send(create_pong_payload(call.clone()).as_slice()).await?;
             },
             // M17 frame!
             "M17 " => {
@@ -99,4 +102,3 @@ async fn main() -> io::Result<()> {
     }
     // TODO -> Disconnect when closed!
 }
-// {"src_call":"<decoded src call>","dest_call":"<decoded dst call>","c2_stream":<Codec2 stream as [u8]>,"done":<Last Packet bool>}
