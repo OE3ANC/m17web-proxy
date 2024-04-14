@@ -20,7 +20,7 @@ type Session = ezsockets::Session<SessionID, ()>;
 pub struct M17ClientServer {}
 
 pub struct M17ClientSession {
-    handle: Session,
+    //handle: Session,
     id: SessionID,
 }
 
@@ -45,7 +45,7 @@ impl ezsockets::ServerExt for M17ClientServer {
         address: SocketAddr,
     ) -> Result<Session, Option<CloseFrame>> {
         let id = address.port();
-        let session = Session::create(|handle| M17ClientSession { id, handle }, id, socket);
+        let session = Session::create(|_| M17ClientSession { id }, id, socket);
         WS_SESSIONS.lock().await.push(session.clone());
         Ok(session)
     }

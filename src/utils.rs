@@ -1,4 +1,3 @@
-use rand::Rng;
 use random_string::generate;
 
 // Base40 charset

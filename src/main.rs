@@ -11,14 +11,14 @@ use ezsockets::Server;
 
 use crate::config::Config;
 use crate::payloads::{create_conn_payload, create_pong_payload};
-use crate::utils::{decode_callsign, encode_callsign, generate_lstn_call};
+use crate::utils::{decode_callsign, generate_lstn_call};
 use crate::websocket::{M17ClientServer, WS_SESSIONS, WsPayload};
 
 use envconfig::{Envconfig};
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    let mut cfg = Config::init_from_env().unwrap();
+    let cfg = Config::init_from_env().unwrap();
 
     let call = generate_lstn_call();
     let conn_method = "LSTN".to_string();
