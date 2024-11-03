@@ -16,7 +16,7 @@ At the moment it's only possible to proxy a single module. This will change in t
 docker build -t m17web-proxy .
 
 docker run -dp 3000:3000 --name m17web-proxy \
-  -e M17WEB_PROXY_CALLSIGN=M17RX \
+  -e M17WEB_PROXY_CALLSIGN=M17WEB \
   -e M17WEB_PROXY_REFLECTOR=ref.oe3xor.at:17000 \
   -e M17WEB_PROXY_MODULE=B \
   m17web-proxy
