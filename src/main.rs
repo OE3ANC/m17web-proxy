@@ -5,16 +5,15 @@ mod utils;
 mod payloads;
 
 use tokio::net::{ UdpSocket};
-use std::{io, thread};
+use std::io;
 use std::io::Write;
-use std::ops::DerefMut;
 use std::str;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use ezsockets::{Server, SessionExt};
+use ezsockets::Server;
 
 use crate::config::Config;
 use crate::payloads::{create_conn_payload, create_pong_payload};
-use crate::utils::{decode_callsign, generate_lstn_call};
+use crate::utils::decode_callsign;
 use crate::websocket::{M17ClientServer, WS_SESSIONS, WsPayload, ModuleInfo};
 use tokio::sync::Mutex;
 
@@ -175,7 +174,7 @@ async fn main() -> io::Result<()> {
 
                             // Serialize as json and send to all connected websocket clients
                             WS_SESSIONS.lock().await.iter().for_each(|session|{
-                                if (session.subscription.reflector == reflector_connection.reflector && session.subscription.module == reflector_connection.module && session.info_connection == false) {
+                                if session.subscription.reflector == reflector_connection.reflector && session.subscription.module == reflector_connection.module && session.info_connection == false {
                                     let send_payload = WsPayload {
                                         reflector: reflector_connection.reflector.to_string(),
                                         module: reflector_connection.module.to_string(),

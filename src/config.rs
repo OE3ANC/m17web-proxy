@@ -1,4 +1,3 @@
-use std::string::ToString;
 use envconfig::{Envconfig};
 
 #[derive(Debug, Envconfig)]
