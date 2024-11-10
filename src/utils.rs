@@ -1,4 +1,3 @@
-use random_string::generate;
 
 // Base40 charset
 pub const CHARSET: &str = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/.";
@@ -62,10 +61,4 @@ pub fn encode_callsign(callsign: String) -> Vec<u8> {
     encoded[5] = ((enc >>  0) & 0xff) as u8;
 
     encoded.to_owned()
-}
-
-pub fn generate_lstn_call() -> String {
-    let charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    let prefix = "SWL".to_string();
-    format!("{prefix}{}", generate(6, charset))
 }

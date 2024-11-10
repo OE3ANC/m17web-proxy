@@ -42,7 +42,7 @@ pub(crate) struct WsPayload {
 }
 
 #[derive(Serialize)]
-pub(crate) struct ModuleInfo {
+pub struct ModuleInfo {
     pub(crate) reflector: String,
     pub(crate) module: String,
     pub(crate) last_heard: u64,
@@ -70,7 +70,7 @@ impl ezsockets::ServerExt for M17ClientServer {
         let id = address.port();
         let session = Session::create(|handle| WebSocketClientSession { id, handle }, id, socket);
 
-        let mut is_info = false;
+        let is_info: bool;
 
         match request.uri().path() {
             "/info" => {

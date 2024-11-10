@@ -117,7 +117,7 @@ async fn main() -> io::Result<()> {
             // if the readiness event is a false positive.
             match reflector_connection.socket.try_recv(&mut buf) {
 
-                Ok(n) => {
+                Ok(_n) => {
                     //println!("GOT {:?}", &buf[..n]);
 
 
@@ -220,19 +220,13 @@ async fn refresh_module_info() {
     }
 }
 
-async fn send_module_info() {
-    for session in WS_SESSIONS.lock().await.iter() {
-        session.ws_session.handle.text(serde_json::to_string(&ACTIVE_MOULES.lock().await.modules).unwrap()).unwrap();
-    }
-}
-
 async fn handle_reconnects() {
     for reflector_connection in REFLECTOR_CONNECTIONS.lock().await.iter_mut() {
         let now = get_epoch().as_secs();
         if now - reflector_connection.last_heard > 60 {
             let module = reflector_connection.module.clone();
             let conn_payload = create_conn_payload("LSTN".to_string(), CFG.callsign.clone(), module);
-            let len =  reflector_connection.socket.send(&conn_payload).await;
+            let _len = reflector_connection.socket.send(&conn_payload).await;
             reflector_connection.last_heard = get_epoch().as_secs();
         }
     }
@@ -281,7 +275,7 @@ async fn get_ref_address(designator: String) -> String {
     let tmp_list = REF_LIST.lock().await.clone();
     for reflector in tmp_list.reflectors.clone().iter() {
         let tmp_des = reflector.designator.clone();
-        if tmp_des.unwrap() == designator.split("-").last().unwrap().clone() {
+        if tmp_des.unwrap() == designator.split("-").last().unwrap() {
             result = format!("{}:{}", reflector.clone().ipv4.unwrap(), reflector.port.unwrap());
         }
     }
