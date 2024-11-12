@@ -72,8 +72,12 @@ impl ezsockets::ServerExt for M17ClientServer {
 
         let is_info: bool;
 
+        let mut sub_ref = "";
+        let mut sub_mod = "";
+
         match request.uri().path() {
-            "/info" => {
+            "/" => {
+                println!("WS_CONNECTION {} connected as info client from {}", id, address);
                 let mut mod_info = vec![];
 
                 for info in REFLECTOR_CONNECTIONS.lock().await.iter() {
@@ -91,6 +95,13 @@ impl ezsockets::ServerExt for M17ClientServer {
                 is_info = true;
             },
             _ => {
+                let mut path = request.uri().path().split("/");
+                // TODO-> Check if path and module are ok
+                _ = path.next().unwrap();
+                sub_ref = path.next().unwrap();
+                sub_mod = path.next().unwrap();
+
+                println!("WS_CONNECTION {} connected as stream client from {} subscribing Reflector {} Module {}", id, address, sub_ref, sub_mod);
                 is_info = false;
             }
         }
@@ -103,8 +114,8 @@ impl ezsockets::ServerExt for M17ClientServer {
                 }
                 ,
                 subscription: ClientSubscription {
-                    reflector: "".to_string(),
-                    module: "".to_string()
+                    reflector: sub_ref.to_string(),
+                    module: sub_mod.to_string()
                 },
                 info_connection: is_info
             }
@@ -118,6 +129,7 @@ impl ezsockets::ServerExt for M17ClientServer {
         _reason: Result<Option<CloseFrame>, Error>,
     ) -> Result<(), Error> {
         let index = WS_SESSIONS.lock().await.iter().position(|x| x.ws_session.id == id).unwrap();
+        println!("WS_SESSION {} disconnected", index);
         WS_SESSIONS.lock().await.remove(index);
         Ok(())
     }
@@ -138,13 +150,21 @@ impl ezsockets::SessionExt for WebSocketClientSession {
     }
 
     async fn on_text(&mut self, text: String) -> Result<(), Error> {
-       let payload: ClientSubscription = serde_json::from_str(&text).unwrap();
+        let payload: ClientSubscription = serde_json::from_str(&text).unwrap();
+        println!("New subscription to stream from WS_CONNECTION {}: Reflector {} Module {}", self.id, payload.reflector.clone(), payload.module.clone());
 
-       for session in WS_SESSIONS.lock().await.iter_mut() {
-           session.subscription.reflector = payload.reflector.clone();
-           session.subscription.module = payload.module.clone();
-           println!("Subscribing to {}'s Module {}", session.subscription.reflector, session.subscription.module);
-       }
+        let mut ws_sessions = WS_SESSIONS.lock().await;
+        for session in ws_sessions.iter_mut() {
+            if session.ws_session.id == self.id {
+                if session.info_connection {
+                    println!("Stream subscription with info client failed!")
+                } else {
+                    session.subscription.reflector = payload.reflector.clone();
+                    session.subscription.module = payload.module.clone();
+                }
+            }
+
+        }
         Ok(())
     }
     async fn on_binary(&mut self, _bytes: Vec<u8>) -> Result<(), Error> { unimplemented!() }

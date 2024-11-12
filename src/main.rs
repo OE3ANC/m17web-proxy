@@ -86,7 +86,7 @@ async fn main() -> io::Result<()> {
             println!("Sub to {} Module {}", reflector, module);
             REFLECTOR_CONNECTIONS.lock().await.push(
                 ReflectorConnection {
-                    reflector: reflector.to_string(),
+                    reflector: reflector.split("_").next().unwrap().to_string(),
                     module: module.to_string(),
                     address: get_ref_address(reflector.split("_").next().unwrap().to_string()).await,
                     last_heard: 0,
@@ -146,7 +146,7 @@ async fn main() -> io::Result<()> {
                         }, // Ignored for now -> mrefd sends ping anyway
                         "PING" => {
                             //println!("We got a PING! Sending PONG...");
-                            //print!(".");
+                            print!(".");
                             io::stdout().flush()?;
 
                             reflector_connection.last_heard = get_epoch().as_secs();
