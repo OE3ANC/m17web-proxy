@@ -9,7 +9,7 @@ use ezsockets::{
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
-use crate::{REFLECTOR_CONNECTIONS};
+use crate::{get_module_infos, REFLECTOR_CONNECTIONS};
 
 lazy_static! {
     pub static ref WS_SESSIONS: Mutex<Vec<M17ClientSession>> = Mutex::new(vec![]);
@@ -43,10 +43,12 @@ pub(crate) struct WsPayload {
 
 #[derive(Serialize)]
 pub struct ModuleInfo {
-    pub(crate) reflector: String,
-    pub(crate) module: String,
-    pub(crate) last_heard: u64,
-    pub(crate) active: bool
+    pub reflector: String,
+    pub module: String,
+    pub last_heard: u64,
+    pub last_qso_call: String,
+    pub last_qso_time: u64,
+    pub active_qso: bool,
 }
 
 #[derive(Deserialize)]
@@ -78,20 +80,8 @@ impl ezsockets::ServerExt for M17ClientServer {
         match request.uri().path() {
             "/" => {
                 println!("WS_CONNECTION {} connected as info client from {}", id, address);
-                let mut mod_info = vec![];
-
-                for info in REFLECTOR_CONNECTIONS.lock().await.iter() {
-                    mod_info.push(
-                        ModuleInfo {
-                            reflector: info.reflector.clone(),
-                            module: info.module.clone(),
-                            last_heard: info.last_heard.clone(),
-                            active: info.active.clone()
-                        }
-                    );
-                }
-
-                session.text(serde_json::to_string(&mod_info).unwrap()).unwrap();
+                // Send init module info
+                session.text(serde_json::to_string(&get_module_infos().await).unwrap()).unwrap();
                 is_info = true;
             },
             _ => {

@@ -63,9 +63,16 @@ pub struct ReflectorConnection {
     module: String,
     address: String,
     last_heard: u64,
-    active: bool,
+    active_qso: bool,
+    active_qso_meta: QsoMeta,
     #[serde(skip_serializing)]
     socket: UdpSocket,
+}
+
+#[derive(Serialize)]
+pub struct QsoMeta {
+    callsign: String,
+    timestamp: u64
 }
 
 #[tokio::main]
@@ -83,14 +90,18 @@ async fn main() -> io::Result<()> {
 
     for reflector in CFG.subscription.split(",") {
         for module in reflector.split("_").last().unwrap().chars() {
-            println!("Sub to {} Module {}", reflector, module);
+            println!("Subscribed to {} Module {}", reflector, module);
             REFLECTOR_CONNECTIONS.lock().await.push(
                 ReflectorConnection {
                     reflector: reflector.split("_").next().unwrap().to_string(),
                     module: module.to_string(),
                     address: get_ref_address(reflector.split("_").next().unwrap().to_string()).await,
                     last_heard: 0,
-                    active: true,
+                    active_qso: false,
+                    active_qso_meta: QsoMeta {
+                        callsign: "".to_string(),
+                        timestamp: 0
+                    },
                     socket: UdpSocket::bind("0.0.0.0:0").await?
                 }
             );
@@ -105,21 +116,23 @@ async fn main() -> io::Result<()> {
         reflector_connection.socket.connect(&reflector_connection.address).await?;
     }
 
+    let mut info_to_send = false;
 
     loop {
         handle_reconnects().await;
         refresh_module_info().await;
+        if info_to_send {
+            send_module_info().await;
+            info_to_send = false;
+        }
 
         for reflector_connection in REFLECTOR_CONNECTIONS.lock().await.iter_mut() {
-
 
             // Try to recv data, this may still fail with `WouldBlock`
             // if the readiness event is a false positive.
             match reflector_connection.socket.try_recv(&mut buf) {
 
                 Ok(_n) => {
-                    //println!("GOT {:?}", &buf[..n]);
-
 
                     let cmd = str::from_utf8(&buf[..4]).unwrap();
 
@@ -145,11 +158,13 @@ async fn main() -> io::Result<()> {
                             reflector_connection.last_heard = get_epoch().as_secs();
                         }, // Ignored for now -> mrefd sends ping anyway
                         "PING" => {
-                            //println!("We got a PING! Sending PONG...");
-                            print!(".");
-                            io::stdout().flush()?;
+                            let now = get_epoch().as_secs();
 
-                            reflector_connection.last_heard = get_epoch().as_secs();
+                            if reflector_connection.active_qso && now - reflector_connection.active_qso_meta.timestamp > 1 {
+                                reflector_connection.active_qso = false;
+                                info_to_send = true;
+                            }
+                            reflector_connection.last_heard = now;
                             reflector_connection.socket.send(create_pong_payload(CFG.callsign.clone()).as_slice()).await?;
                         },
                         // M17 frame!
@@ -186,6 +201,15 @@ async fn main() -> io::Result<()> {
                                     session.ws_session.handle.text(serde_json::to_string(&send_payload).unwrap()).unwrap();
                                 }
                             });
+
+                            if reflector_connection.active_qso == false {
+                                reflector_connection.active_qso = true;
+                                info_to_send = true;
+                            }
+
+
+                            reflector_connection.active_qso_meta.callsign = src_call.clone();
+                            reflector_connection.active_qso_meta.timestamp = get_epoch().as_secs();
                         }
                         _ => {
                             print!(" ");
@@ -206,6 +230,32 @@ async fn main() -> io::Result<()> {
     }
 }
 
+async fn send_module_info() {
+    for session in WS_SESSIONS.lock().await.iter() {
+        if session.info_connection {
+            session.ws_session.handle.text(serde_json::to_string(&get_module_infos().await).unwrap()).unwrap();
+        }
+    }
+}
+
+async fn get_module_infos() -> Vec<ModuleInfo> {
+    let mut mod_info = vec![];
+
+    for info in REFLECTOR_CONNECTIONS.lock().await.iter() {
+        mod_info.push(
+            ModuleInfo {
+                reflector: info.reflector.clone(),
+                module: info.module.clone(),
+                last_heard: info.last_heard.clone(),
+                last_qso_call: info.active_qso_meta.callsign.clone(),
+                last_qso_time: info.active_qso_meta.timestamp.clone(),
+                active_qso: info.active_qso.clone()
+            }
+        );
+    }
+    mod_info
+}
+
 async fn refresh_module_info() {
     ACTIVE_MOULES.lock().await.modules = vec![];
     for info in REFLECTOR_CONNECTIONS.lock().await.iter() {
@@ -214,7 +264,9 @@ async fn refresh_module_info() {
                 reflector: info.reflector.clone(),
                 module: info.module.clone(),
                 last_heard: info.last_heard.clone(),
-                active: info.active.clone()
+                last_qso_call: "".to_string(),
+                last_qso_time: info.active_qso_meta.timestamp.clone(),
+                active_qso: false,
             }
         );
     }
@@ -249,7 +301,6 @@ async fn map_reflector_list() {
     REF_LIST.lock().await.reflectors = tmp_ref.reflectors;
     REF_LIST.lock().await.status = tmp_ref.status;
     REF_LIST.lock().await.generated_at = tmp_ref.generated_at;
-
 }
 
 async fn http_client(url: String) -> Response {
