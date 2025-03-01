@@ -23,7 +23,8 @@ use reqwest::Response;
 use serde::{Deserialize, Serialize};
 
 static APP_USER_AGENT: &str = concat!(
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36",
+    "M17WEBPROXY/",
+    "1.0",
 );
 
 lazy_static! {
@@ -44,6 +45,7 @@ pub struct ReflectorList {
 pub struct Reflector {
     designator: Option<String>,
     url: Option<String>,
+    dns: Option<String>,
     ipv4: Option<String>,
     ipv6: Option<String>,
     port: Option<u64>,
@@ -316,7 +318,14 @@ async fn http_client(url: String) -> Response {
     - cfg
  */
 async fn download_reflector_list() -> String {
-    http_client(String::from("https://dvref.com/mrefd/json/?format=json")).await.text().await.unwrap()
+    //let text = http_client(String::from("https://dvref.com/mrefd/json/?format=json")).await.text().await.unwrap();
+    //if text.contains("Cloudflare") {
+        // Load fallback from file
+        let alternative = std::fs::read_to_string("/app/reflector.json").unwrap_or_else(|_| String::from(""));
+        alternative
+    //} else {
+    //    text
+    //}
 }
 
 
