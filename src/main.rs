@@ -23,8 +23,7 @@ use reqwest::Response;
 use serde::{Deserialize, Serialize};
 
 static APP_USER_AGENT: &str = concat!(
-    "M17WEBPROXY/",
-    env!("CARGO_PKG_VERSION"),
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36",
 );
 
 lazy_static! {
