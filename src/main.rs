@@ -19,6 +19,8 @@ use tokio::sync::Mutex;
 
 use envconfig::{Envconfig};
 use lazy_static::lazy_static;
+use rand::distributions::Alphanumeric;
+use rand::Rng;
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
 
@@ -83,6 +85,14 @@ async fn main() -> io::Result<()> {
     let (server, _) = Server::create(|_server| M17ClientServer {});
     let listener = CFG.ws_listener_address.clone();
 
+    let callsign = if CFG.callsign == "NONE" {
+        format!("SWL{}",rand::thread_rng().gen_range(10000..99999))
+    } else {
+        CFG.callsign.clone()
+    }.to_string();
+
+    println!("Callsign for proxy: {}", callsign);
+
     tokio::spawn(async move {
         ezsockets::tungstenite::run(server, listener).await.unwrap();
     });
@@ -120,7 +130,7 @@ async fn main() -> io::Result<()> {
     let mut info_to_send = false;
 
     loop {
-        handle_reconnects().await;
+        handle_reconnects(callsign.clone()).await;
         refresh_module_info().await;
         if info_to_send {
             send_module_info().await;
@@ -166,7 +176,7 @@ async fn main() -> io::Result<()> {
                                 info_to_send = true;
                             }
                             reflector_connection.last_heard = now;
-                            reflector_connection.socket.send(create_pong_payload(CFG.callsign.clone()).as_slice()).await?;
+                            reflector_connection.socket.send(create_pong_payload(callsign.clone()).as_slice()).await?;
                         },
                         // M17 frame!
                         "M17 " => {
@@ -273,12 +283,12 @@ async fn refresh_module_info() {
     }
 }
 
-async fn handle_reconnects() {
+async fn handle_reconnects(callsign: String) {
     for reflector_connection in REFLECTOR_CONNECTIONS.lock().await.iter_mut() {
         let now = get_epoch().as_secs();
         if now - reflector_connection.last_heard > 60 {
             let module = reflector_connection.module.clone();
-            let conn_payload = create_conn_payload("LSTN".to_string(), CFG.callsign.clone(), module);
+            let conn_payload = create_conn_payload("LSTN".to_string(), callsign.clone(), module);
             let _len = reflector_connection.socket.send(&conn_payload).await;
             reflector_connection.last_heard = get_epoch().as_secs();
         }
@@ -292,7 +302,14 @@ fn get_epoch() -> Duration {
 }
  async fn load_reflector_list() -> ReflectorList {
     let result: String = download_reflector_list().await;
-    serde_json::from_str(result.as_str()).unwrap()
+    match serde_json::from_str(result.as_str()) {
+        Ok(reflist) => reflist,
+        Err(e) => {
+            serde_json::from_str(result.as_str()).unwrap_or_else(|e| {
+                panic!("Unable to load reflectorlist!")
+            })
+        }
+    }
 }
 
 // TODO -> There must be a better way?
@@ -318,14 +335,11 @@ async fn http_client(url: String) -> Response {
     - cfg
  */
 async fn download_reflector_list() -> String {
-    //let text = http_client(String::from("https://dvref.com/mrefd/json/?format=json")).await.text().await.unwrap();
-    //if text.contains("Cloudflare") {
-        // Load fallback from file
-        let alternative = std::fs::read_to_string("/app/reflector.json").unwrap_or_else(|_| String::from(""));
-        alternative
-    //} else {
-    //    text
-    //}
+    http_client(String::from("https://dvref.com/mrefd/json/?format=json")).await.text().await.unwrap()
+}
+
+async fn load_reflector_list_from_file() -> String {
+    std::fs::read_to_string("/app/reflector.json").unwrap_or_else(|_| String::from(""))
 }
 
 

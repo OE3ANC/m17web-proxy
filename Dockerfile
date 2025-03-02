@@ -1,4 +1,4 @@
-FROM ubuntu:latest as build
+FROM ubuntu:24.04 as build
 LABEL authors="oe3anc"
 
 RUN mkdir "app"
@@ -27,7 +27,7 @@ RUN rm -rf ./tmp/
 
 RUN ls -hal
 
-FROM ubuntu:latest
+FROM ubuntu:24.04
 
 RUN apt update && apt install curl build-essential pkg-config libssl-dev -y
 
