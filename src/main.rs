@@ -305,7 +305,7 @@ fn get_epoch() -> Duration {
     match serde_json::from_str(result.as_str()) {
         Ok(reflist) => reflist,
         Err(e) => {
-            serde_json::from_str(result.as_str()).unwrap_or_else(|e| {
+            serde_json::from_str(load_reflector_list_from_file().await.as_str()).unwrap_or_else(|e| {
                 panic!("Unable to load reflectorlist!")
             })
         }
