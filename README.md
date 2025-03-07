@@ -13,7 +13,6 @@
 docker build -t m17web-proxy .
 
 docker run -dp 3000:3000 --name m17web-proxy \
-  -e M17WEB_PROXY_CALLSIGN=M17WEB \
   -e M17WEB_PROXY_SUBSCRIPTION=M17-XOR_ABC,M17-DEV_DEF \
   m17web-proxy
 ```
