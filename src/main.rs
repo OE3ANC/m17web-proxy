@@ -72,7 +72,7 @@ pub struct ReflectorConnection {
     socket: UdpSocket,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct MsgData {
     callsign: String,
     message: String,
@@ -303,7 +303,8 @@ async fn get_module_infos() -> Vec<ModuleInfo> {
                 last_heard: info.last_heard.clone(),
                 last_qso_call: info.active_qso_meta.callsign.clone(),
                 last_qso_time: info.active_qso_meta.timestamp.clone(),
-                active_qso: info.active_qso.clone()
+                active_qso: info.active_qso.clone(),
+                messages: info.messages.clone(),
             }
         );
     }
@@ -321,6 +322,7 @@ async fn refresh_module_info() {
                 last_qso_call: "".to_string(),
                 last_qso_time: info.active_qso_meta.timestamp.clone(),
                 active_qso: false,
+                messages: info.messages.clone(),
             }
         );
     }

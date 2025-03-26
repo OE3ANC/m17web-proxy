@@ -4,7 +4,7 @@ use ezsockets::{CloseFrame, Error, Request, Socket, Utf8Bytes};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
-use crate::{get_module_infos};
+use crate::{get_module_infos, MsgData};
 
 lazy_static! {
     pub static ref WS_SESSIONS: Mutex<Vec<M17ClientSession>> = Mutex::new(vec![]);
@@ -45,7 +45,9 @@ pub struct ModuleInfo {
     pub last_qso_call: String,
     pub last_qso_time: u64,
     pub active_qso: bool,
+    pub messages: Vec<MsgData>,
 }
+
 
 #[derive(Deserialize)]
 pub(crate) struct ClientSubscription {
