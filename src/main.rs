@@ -180,21 +180,25 @@ async fn main() -> io::Result<()> {
                         },
                         // M17 frame!
                         "M17 " | "M17P" => {
-                            //println!("We received a payload: {:x?}", &buf[..n]);
 
-                            // Decoded source callsign
-                            let src_call =  decode_callsign(&buf[12..18]);
-
-                            // Decoded destination callsign
-                            let dest_call = decode_callsign(&buf[6..12]);
+                            let mut src_call: String = "".to_string();
+                            let mut dst_call: String = "".to_string();
 
                             let mut c2_data = vec![];
                             let mut pm_data = vec![];
 
                             if cmd == "M17 " {
+
+                                dst_call = decode_callsign(&buf[6..12]);
+                                src_call = decode_callsign(&buf[12..18]);
+
                                 // Codec 2 stream
                                 c2_data = buf[36..52].to_vec();
+
                             } else {
+
+                                dst_call = decode_callsign(&buf[4..10]);
+                                src_call = decode_callsign(&buf[10..16]);
 
                                 // Find the last non-zero byte
                                 let last_non_zero = buf[35..].iter()
@@ -204,7 +208,9 @@ async fn main() -> io::Result<()> {
                                 // Create a vector with all bytes up to and including the last non-zero byte
                                 pm_data = buf[35..(35 + last_non_zero - 1)].to_vec();
 
-                                println!("Packet data: {:?}", pm_data)
+                                println!("Packet src_call: {:?}", src_call);
+                                println!("Packet dst_call: {:?}", dst_call);
+                                println!("Packet data: {:x?}", buf)
                             }
 
                             // Last frame 1st byte of last stream is always > 0x80
@@ -221,7 +227,7 @@ async fn main() -> io::Result<()> {
                                         reflector: reflector_connection.reflector.to_string(),
                                         module: reflector_connection.module.to_string(),
                                         src_call: src_call.clone(),
-                                        dest_call: dest_call.clone(),
+                                        dest_call: dst_call.clone(),
                                         c2_stream: c2_data.clone(),
                                         pm_stream: pm_data.clone(),
                                         done: is_last
