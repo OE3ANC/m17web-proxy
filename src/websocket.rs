@@ -1,15 +1,10 @@
 use std::net::SocketAddr;
 use async_trait::async_trait;
-use ezsockets::{
-    CloseFrame,
-    Error,
-    Request,
-    Socket,
-};
+use ezsockets::{CloseFrame, Error, Request, Socket, Utf8Bytes};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
-use crate::{get_module_infos, REFLECTOR_CONNECTIONS};
+use crate::{get_module_infos, MsgData};
 
 lazy_static! {
     pub static ref WS_SESSIONS: Mutex<Vec<M17ClientSession>> = Mutex::new(vec![]);
@@ -38,6 +33,7 @@ pub(crate) struct WsPayload {
     pub(crate) src_call: String,
     pub(crate) dest_call: String,
     pub(crate) c2_stream: Vec<u8>,
+    pub(crate) pm_stream: Vec<u8>,
     pub(crate) done: bool,
 }
 
@@ -49,7 +45,9 @@ pub struct ModuleInfo {
     pub last_qso_call: String,
     pub last_qso_time: u64,
     pub active_qso: bool,
+    pub messages: Vec<MsgData>,
 }
+
 
 #[derive(Deserialize)]
 pub(crate) struct ClientSubscription {
@@ -139,7 +137,7 @@ impl ezsockets::SessionExt for WebSocketClientSession {
         &self.id
     }
 
-    async fn on_text(&mut self, text: String) -> Result<(), Error> {
+    async fn on_text(&mut self, text: Utf8Bytes) -> Result<(), Error> {
         let payload: ClientSubscription = serde_json::from_str(&text).unwrap();
         println!("New subscription to stream from WS_CONNECTION {}: Reflector {} Module {}", self.id, payload.reflector.clone(), payload.module.clone());
 
@@ -157,7 +155,7 @@ impl ezsockets::SessionExt for WebSocketClientSession {
         }
         Ok(())
     }
-    async fn on_binary(&mut self, _bytes: Vec<u8>) -> Result<(), Error> { unimplemented!() }
+    async fn on_binary(&mut self, _bytes: ezsockets::Bytes) -> Result<(), Error> { unimplemented!() }
     async fn on_call(&mut self, _call: Self::Call) -> Result<(), Error> { unimplemented!() }
 }
 

@@ -19,7 +19,6 @@ use tokio::sync::Mutex;
 
 use envconfig::{Envconfig};
 use lazy_static::lazy_static;
-use rand::distributions::Alphanumeric;
 use rand::Rng;
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
@@ -68,8 +67,16 @@ pub struct ReflectorConnection {
     last_heard: u64,
     active_qso: bool,
     active_qso_meta: QsoMeta,
+    messages: Vec<MsgData>,
     #[serde(skip_serializing)]
     socket: UdpSocket,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct MsgData {
+    callsign: String,
+    message: String,
+    timestamp: u64
 }
 
 #[derive(Serialize)]
@@ -86,7 +93,7 @@ async fn main() -> io::Result<()> {
     let listener = CFG.ws_listener_address.clone();
 
     let callsign = if CFG.callsign == "NONE" {
-        format!("SWL{}",rand::thread_rng().gen_range(10000..99999))
+        format!("SWL{}",rand::rng().random_range(10000..99999))
     } else {
         CFG.callsign.clone()
     }.to_string();
@@ -113,6 +120,7 @@ async fn main() -> io::Result<()> {
                         callsign: "".to_string(),
                         timestamp: 0
                     },
+                    messages: Vec::new(),
                     socket: UdpSocket::bind("0.0.0.0:0").await?
                 }
             );
@@ -121,7 +129,6 @@ async fn main() -> io::Result<()> {
     }
 
 
-    let mut buf = [0; 128];
 
     for reflector_connection in REFLECTOR_CONNECTIONS.lock().await.iter() {
         reflector_connection.socket.connect(&reflector_connection.address).await?;
@@ -130,6 +137,8 @@ async fn main() -> io::Result<()> {
     let mut info_to_send = false;
 
     loop {
+        let mut buf = [0; 1024];
+
         handle_reconnects(callsign.clone()).await;
         refresh_module_info().await;
         if info_to_send {
@@ -179,17 +188,51 @@ async fn main() -> io::Result<()> {
                             reflector_connection.socket.send(create_pong_payload(callsign.clone()).as_slice()).await?;
                         },
                         // M17 frame!
-                        "M17 " => {
-                            //println!("We received a payload: {:x?}", &buf[..n]);
+                        "M17 " | "M17P" => {
 
-                            // Decoded source callsign
-                            let src_call =  decode_callsign(&buf[12..18]);
+                            let mut src_call: String = "".to_string();
+                            let mut dst_call: String = "".to_string();
 
-                            // Decoded destination callsign
-                            let dest_call = decode_callsign(&buf[6..12]);
+                            let mut c2_data = vec![];
+                            let mut pm_data = vec![];
 
-                            // Codec 2 stream
-                            let data: &[u8] = &buf[36..52];
+                            if cmd == "M17 " {
+
+                                dst_call = decode_callsign(&buf[6..12]);
+                                src_call = decode_callsign(&buf[12..18]);
+
+                                // Codec 2 stream
+                                c2_data = buf[36..52].to_vec();
+
+                                println!("Packet src_call: {:?}", src_call);
+                                println!("Packet dst_call: {:?}", dst_call);
+                                println!("Voice data: {:x?}", &buf[..52])
+
+                            } else {
+
+                                dst_call = decode_callsign(&buf[4..10]);
+                                src_call = decode_callsign(&buf[10..16]);
+
+                                // Find the last non-zero byte
+                                let last_non_zero = buf[35..].iter()
+                                    .rposition(|&x| x != 0)
+                                    .unwrap_or(0);
+
+                                // Create a vector with all bytes up to and including the last non-zero byte
+                                pm_data = buf[35..(35 + last_non_zero - 2)].to_vec();
+
+                                println!("Packet src_call: {:?}", src_call);
+                                println!("Packet dst_call: {:?}", dst_call);
+                                println!("Packet data: {:x?}", &buf[..52]);
+
+                                reflector_connection.messages.push( MsgData {
+                                    callsign: src_call.clone(),
+                                    message: str::from_utf8(pm_data.as_slice()).unwrap().to_string(),
+                                    timestamp: get_epoch().as_secs(),
+                                });
+                                info_to_send = true;
+
+                            }
 
                             // Last frame 1st byte of last stream is always > 0x80
                             let mut is_last = false;
@@ -205,8 +248,9 @@ async fn main() -> io::Result<()> {
                                         reflector: reflector_connection.reflector.to_string(),
                                         module: reflector_connection.module.to_string(),
                                         src_call: src_call.clone(),
-                                        dest_call: dest_call.clone(),
-                                        c2_stream: Vec::from(data),
+                                        dest_call: dst_call.clone(),
+                                        c2_stream: c2_data.clone(),
+                                        pm_stream: pm_data.clone(),
                                         done: is_last
                                     };
                                     session.ws_session.handle.text(serde_json::to_string(&send_payload).unwrap()).unwrap();
@@ -217,7 +261,6 @@ async fn main() -> io::Result<()> {
                                 reflector_connection.active_qso = true;
                                 info_to_send = true;
                             }
-
 
                             reflector_connection.active_qso_meta.callsign = src_call.clone();
                             reflector_connection.active_qso_meta.timestamp = get_epoch().as_secs();
@@ -260,7 +303,8 @@ async fn get_module_infos() -> Vec<ModuleInfo> {
                 last_heard: info.last_heard.clone(),
                 last_qso_call: info.active_qso_meta.callsign.clone(),
                 last_qso_time: info.active_qso_meta.timestamp.clone(),
-                active_qso: info.active_qso.clone()
+                active_qso: info.active_qso.clone(),
+                messages: info.messages.clone(),
             }
         );
     }
@@ -278,6 +322,7 @@ async fn refresh_module_info() {
                 last_qso_call: "".to_string(),
                 last_qso_time: info.active_qso_meta.timestamp.clone(),
                 active_qso: false,
+                messages: info.messages.clone(),
             }
         );
     }
@@ -304,9 +349,9 @@ fn get_epoch() -> Duration {
     let result: String = download_reflector_list().await;
     match serde_json::from_str(result.as_str()) {
         Ok(reflist) => reflist,
-        Err(e) => {
+        Err(_) => {
             serde_json::from_str(load_reflector_list_from_file().await.as_str()).unwrap_or_else(|e| {
-                panic!("Unable to load reflectorlist!")
+                panic!("Unable to load reflectorlist! {:?}", e)
             })
         }
     }
