@@ -38,6 +38,7 @@ pub(crate) struct WsPayload {
     pub(crate) src_call: String,
     pub(crate) dest_call: String,
     pub(crate) c2_stream: Vec<u8>,
+    pub(crate) pm_stream: Vec<u8>,
     pub(crate) done: bool,
 }
 

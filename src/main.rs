@@ -121,7 +121,6 @@ async fn main() -> io::Result<()> {
     }
 
 
-    let mut buf = [0; 128];
 
     for reflector_connection in REFLECTOR_CONNECTIONS.lock().await.iter() {
         reflector_connection.socket.connect(&reflector_connection.address).await?;
@@ -130,6 +129,8 @@ async fn main() -> io::Result<()> {
     let mut info_to_send = false;
 
     loop {
+        let mut buf = [0; 1024];
+
         handle_reconnects(callsign.clone()).await;
         refresh_module_info().await;
         if info_to_send {
@@ -179,7 +180,7 @@ async fn main() -> io::Result<()> {
                             reflector_connection.socket.send(create_pong_payload(callsign.clone()).as_slice()).await?;
                         },
                         // M17 frame!
-                        "M17 " => {
+                        "M17 " | "M17P" => {
                             //println!("We received a payload: {:x?}", &buf[..n]);
 
                             // Decoded source callsign
@@ -188,8 +189,24 @@ async fn main() -> io::Result<()> {
                             // Decoded destination callsign
                             let dest_call = decode_callsign(&buf[6..12]);
 
-                            // Codec 2 stream
-                            let data: &[u8] = &buf[36..52];
+                            let mut c2_data = vec![];
+                            let mut pm_data = vec![];
+
+                            if cmd == "M17 " {
+                                // Codec 2 stream TODO -> Test with buffer start at 35 instead of 36
+                                c2_data = buf[35..52].to_vec();
+                            } else {
+
+                                // Find the last non-zero byte
+                                let last_non_zero = buf[35..].iter()
+                                    .rposition(|&x| x != 0)
+                                    .unwrap_or(0);
+
+                                // Create a vector with all bytes up to and including the last non-zero byte
+                                pm_data = buf[35..(35 + last_non_zero - 1)].to_vec();
+
+                                println!("Packet data: {:?}", pm_data)
+                            }
 
                             // Last frame 1st byte of last stream is always > 0x80
                             let mut is_last = false;
@@ -206,7 +223,8 @@ async fn main() -> io::Result<()> {
                                         module: reflector_connection.module.to_string(),
                                         src_call: src_call.clone(),
                                         dest_call: dest_call.clone(),
-                                        c2_stream: Vec::from(data),
+                                        c2_stream: c2_data.clone(),
+                                        pm_stream: pm_data.clone(),
                                         done: is_last
                                     };
                                     session.ws_session.handle.text(serde_json::to_string(&send_payload).unwrap()).unwrap();
