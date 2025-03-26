@@ -6,12 +6,12 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1.37.0", features = ["full"] }
-ezsockets = { version = "0.6.2", features = ["tungstenite"] }
+ezsockets = { version = "0.7.0", features = ["tungstenite"] }
 lazy_static = "1.4.0"
 async-trait = "0.1.80"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.115"
 envconfig = "0.11.0"
-rand = "0.8.5"
+rand = "0.9.0"
 reqwest = { version = "0.12.12", features = ["blocking"] }
 
