@@ -85,7 +85,7 @@ async fn main() -> io::Result<()> {
     let listener = CFG.ws_listener_address.clone();
 
     let callsign = if CFG.callsign == "NONE" {
-        format!("SWL{}",rand::thread_rng().gen_range(10000..99999))
+        format!("SWL{}",rand::rng().random_range(10000..99999))
     } else {
         CFG.callsign.clone()
     }.to_string();
