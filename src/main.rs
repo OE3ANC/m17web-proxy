@@ -192,8 +192,8 @@ async fn main() -> io::Result<()> {
                             let mut pm_data = vec![];
 
                             if cmd == "M17 " {
-                                // Codec 2 stream TODO -> Test with buffer start at 35 instead of 36
-                                c2_data = buf[35..52].to_vec();
+                                // Codec 2 stream
+                                c2_data = buf[36..52].to_vec();
                             } else {
 
                                 // Find the last non-zero byte
