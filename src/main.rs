@@ -219,7 +219,7 @@ async fn main() -> io::Result<()> {
                                     .unwrap_or(0);
 
                                 // Create a vector with all bytes up to and including the last non-zero byte
-                                pm_data = buf[35..(35 + last_non_zero - 1)].to_vec();
+                                pm_data = buf[35..(35 + last_non_zero - 2)].to_vec();
 
                                 println!("Packet src_call: {:?}", src_call);
                                 println!("Packet dst_call: {:?}", dst_call);
