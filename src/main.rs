@@ -19,7 +19,6 @@ use tokio::sync::Mutex;
 
 use envconfig::{Envconfig};
 use lazy_static::lazy_static;
-use rand::distributions::Alphanumeric;
 use rand::Rng;
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
@@ -322,9 +321,9 @@ fn get_epoch() -> Duration {
     let result: String = download_reflector_list().await;
     match serde_json::from_str(result.as_str()) {
         Ok(reflist) => reflist,
-        Err(e) => {
+        Err(_) => {
             serde_json::from_str(load_reflector_list_from_file().await.as_str()).unwrap_or_else(|e| {
-                panic!("Unable to load reflectorlist!")
+                panic!("Unable to load reflectorlist! {:?}", e)
             })
         }
     }

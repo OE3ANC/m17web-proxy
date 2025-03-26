@@ -2,10 +2,10 @@
 ## Configuration
 
 ### Environment variables:
-| Variable | Description                                                      | Default                 |
-| -------- |------------------------------------------------------------------|-------------------------|
-| M17WEB_PROXY_CALLSIGN | Callsign of the proxy                                            | SWLXXXXX                |
-| M17WEB_PROXY_LISTENER | Address:Port to listen on                                        | 0.0.0.0:3000            |
+| Variable                  | Description                                                      | Default                 |
+|---------------------------|------------------------------------------------------------------|-------------------------|
+| M17WEB_PROXY_CALLSIGN     | Callsign of the proxy                                            | SWLXXXXX                |
+| M17WEB_PROXY_LISTENER     | Address:Port to listen on                                        | 0.0.0.0:3000            |
 | M17WEB_PROXY_SUBSCRIPTION | Format is *Designator*\_*Modules*\,*Designator*\_*Modules*\, ... | M17-XOR_ABC,M17-DEV_DEF | 
 
 ### Docker
