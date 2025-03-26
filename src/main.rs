@@ -67,8 +67,16 @@ pub struct ReflectorConnection {
     last_heard: u64,
     active_qso: bool,
     active_qso_meta: QsoMeta,
+    messages: Vec<MsgData>,
     #[serde(skip_serializing)]
     socket: UdpSocket,
+}
+
+#[derive(Serialize)]
+pub struct MsgData {
+    callsign: String,
+    message: String,
+    timestamp: u64
 }
 
 #[derive(Serialize)]
@@ -112,6 +120,7 @@ async fn main() -> io::Result<()> {
                         callsign: "".to_string(),
                         timestamp: 0
                     },
+                    messages: Vec::new(),
                     socket: UdpSocket::bind("0.0.0.0:0").await?
                 }
             );
@@ -195,6 +204,10 @@ async fn main() -> io::Result<()> {
                                 // Codec 2 stream
                                 c2_data = buf[36..52].to_vec();
 
+                                println!("Packet src_call: {:?}", src_call);
+                                println!("Packet dst_call: {:?}", dst_call);
+                                println!("Voice data: {:x?}", &buf[..52])
+
                             } else {
 
                                 dst_call = decode_callsign(&buf[4..10]);
@@ -210,7 +223,15 @@ async fn main() -> io::Result<()> {
 
                                 println!("Packet src_call: {:?}", src_call);
                                 println!("Packet dst_call: {:?}", dst_call);
-                                println!("Packet data: {:x?}", buf)
+                                println!("Packet data: {:x?}", &buf[..52]);
+
+                                reflector_connection.messages.push( MsgData {
+                                    callsign: src_call.clone(),
+                                    message: str::from_utf8(pm_data.as_slice()).unwrap().to_string(),
+                                    timestamp: get_epoch().as_secs(),
+                                });
+                                info_to_send = true;
+
                             }
 
                             // Last frame 1st byte of last stream is always > 0x80
@@ -240,7 +261,6 @@ async fn main() -> io::Result<()> {
                                 reflector_connection.active_qso = true;
                                 info_to_send = true;
                             }
-
 
                             reflector_connection.active_qso_meta.callsign = src_call.clone();
                             reflector_connection.active_qso_meta.timestamp = get_epoch().as_secs();
