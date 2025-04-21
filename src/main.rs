@@ -384,7 +384,7 @@ async fn download_reflector_list() -> String {
 }
 
 async fn load_reflector_list_from_file() -> String {
-    std::fs::read_to_string("/app/reflector.json").unwrap_or_else(|_| String::from(""))
+    std::fs::read_to_string("reflector.json").unwrap_or_else(|_| String::from(""))
 }
 
 
