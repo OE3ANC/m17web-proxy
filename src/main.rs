@@ -380,11 +380,11 @@ async fn http_client(url: String) -> Response {
     - cfg
  */
 async fn download_reflector_list() -> String {
-    http_client(String::from("https://dvref.com/mrefd/json/?format=json")).await.text().await.unwrap()
+    http_client(String::from("https://dvref.com/mrefd/reflectors/")).await.text().await.unwrap()
 }
 
 async fn load_reflector_list_from_file() -> String {
-    std::fs::read_to_string("/app/reflector.json").unwrap_or_else(|_| String::from(""))
+    std::fs::read_to_string("reflector.json").unwrap_or_else(|_| String::from(""))
 }
 
 
