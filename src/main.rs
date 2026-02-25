@@ -1,57 +1,32 @@
 
 mod config;
+mod dht;
 mod websocket;
 mod utils;
 mod payloads;
 
-use tokio::net::{ UdpSocket};
+use tokio::net::UdpSocket;
 use std::io;
-use std::io::Write;
 use std::str;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use ezsockets::Server;
 
 use crate::config::Config;
+use crate::dht::{DhtNode, get_ref_address_from_dht};
 use crate::payloads::{create_conn_payload, create_pong_payload};
 use crate::utils::decode_callsign;
 use crate::websocket::{M17ClientServer, WS_SESSIONS, WsPayload, ModuleInfo};
 use tokio::sync::Mutex;
 
-use envconfig::{Envconfig};
+use envconfig::Envconfig;
 use lazy_static::lazy_static;
 use rand::Rng;
-use reqwest::Response;
-use serde::{Deserialize, Serialize};
-
-static APP_USER_AGENT: &str = concat!(
-    "M17WEBPROXY/",
-    "1.0",
-);
+use serde::Serialize;
 
 lazy_static! {
     pub static ref REFLECTOR_CONNECTIONS: Mutex<Vec<ReflectorConnection>> = Mutex::new(vec![]);
     pub static ref CFG: Config = Config::init_from_env().unwrap();
     pub static ref ACTIVE_MOULES: Mutex<ActiveModules> = Mutex::new(ActiveModules {modules: vec![]});
-    pub static ref REF_LIST: Mutex<ReflectorList> = Mutex::new(ReflectorList {status: None,generated_at: None,reflectors: vec![],});
-}
-
-#[derive(Deserialize, Clone)]
-pub struct ReflectorList {
-    status : Option<String>,
-    generated_at: Option<String>,
-    reflectors: Vec<Reflector>
-}
-
-#[derive(Deserialize, Clone)]
-pub struct Reflector {
-    designator: Option<String>,
-    url: Option<String>,
-    dns: Option<String>,
-    ipv4: Option<String>,
-    ipv6: Option<String>,
-    port: Option<u64>,
-    sponsor: Option<String>,
-    country: Option<String>
 }
 
 #[derive(Serialize)]
@@ -104,16 +79,40 @@ async fn main() -> io::Result<()> {
         ezsockets::tungstenite::run(server, listener).await.unwrap();
     });
 
-    map_reflector_list().await;
+    // Initialize the DHT node
+    let dht_identity_name = format!("M17WebProxy{}", std::process::id());
+    let dht_node = DhtNode::new(17171, &dht_identity_name)
+        .expect("Failed to create DHT node");
+
+    // Bootstrap into the ham-dht network
+    dht_node.bootstrap(&CFG.dht_bootstrap, &CFG.dht_port);
+
+    // Give the DHT node time to bootstrap and discover peers
+    println!("DHT: Waiting for bootstrap to complete...");
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     for reflector in CFG.subscription.split(",") {
+        let reflector_designator = reflector.split("_").next().unwrap().to_string();
+
+        // Resolve reflector address via DHT
+        let address = match get_ref_address_from_dht(&dht_node, &reflector_designator).await {
+            Ok(addr) => {
+                println!("DHT: Resolved {} -> {}", reflector_designator, addr);
+                addr
+            }
+            Err(e) => {
+                eprintln!("DHT: Failed to resolve {}: {}", reflector_designator, e);
+                continue;
+            }
+        };
+
         for module in reflector.split("_").last().unwrap().chars() {
             println!("Subscribed to {} Module {}", reflector, module);
             REFLECTOR_CONNECTIONS.lock().await.push(
                 ReflectorConnection {
-                    reflector: reflector.split("_").next().unwrap().to_string(),
+                    reflector: reflector_designator.clone(),
                     module: module.to_string(),
-                    address: get_ref_address(reflector.split("_").next().unwrap().to_string()).await,
+                    address: address.clone(),
                     last_heard: 0,
                     active_qso: false,
                     active_qso_meta: QsoMeta {
@@ -127,8 +126,6 @@ async fn main() -> io::Result<()> {
 
         }
     }
-
-
 
     for reflector_connection in REFLECTOR_CONNECTIONS.lock().await.iter() {
         reflector_connection.socket.connect(&reflector_connection.address).await?;
@@ -344,58 +341,4 @@ fn get_epoch() -> Duration {
     let start = SystemTime::now();
     start.duration_since(UNIX_EPOCH)
         .expect("Time went backwards")
-}
- async fn load_reflector_list() -> ReflectorList {
-    let result: String = download_reflector_list().await;
-    match serde_json::from_str(result.as_str()) {
-        Ok(reflist) => reflist,
-        Err(_) => {
-            serde_json::from_str(load_reflector_list_from_file().await.as_str()).unwrap_or_else(|e| {
-                panic!("Unable to load reflectorlist! {:?}", e)
-            })
-        }
-    }
-}
-
-// TODO -> There must be a better way?
-async fn map_reflector_list() {
-    let tmp_ref = load_reflector_list().await;
-
-    REF_LIST.lock().await.reflectors = tmp_ref.reflectors;
-    REF_LIST.lock().await.status = tmp_ref.status;
-    REF_LIST.lock().await.generated_at = tmp_ref.generated_at;
-}
-
-async fn http_client(url: String) -> Response {
-    let client = reqwest::Client::builder()
-        .user_agent(APP_USER_AGENT)
-        .build().unwrap();
-    client.get(url).send().await.unwrap()
-}
-
-/*
-    TODO:
-    - If local file exists and is older, overwrite after testing if new can be deserialized
-    - Fallback to local file!
-    - cfg
- */
-async fn download_reflector_list() -> String {
-    http_client(String::from("https://dvref.com/mrefd/reflectors/")).await.text().await.unwrap()
-}
-
-async fn load_reflector_list_from_file() -> String {
-    std::fs::read_to_string("reflector.json").unwrap_or_else(|_| String::from(""))
-}
-
-
-async fn get_ref_address(designator: String) -> String {
-    let mut result = String::new();
-    let tmp_list = REF_LIST.lock().await.clone();
-    for reflector in tmp_list.reflectors.clone().iter() {
-        let tmp_des = reflector.designator.clone();
-        if tmp_des.unwrap() == designator.split("-").last().unwrap() {
-            result = format!("{}:{}", reflector.clone().ipv4.unwrap(), reflector.port.unwrap());
-        }
-    }
-    result
 }
