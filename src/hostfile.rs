@@ -30,7 +30,7 @@ pub struct HostEntry {
     pub dns: Option<String>,
     pub ipv4: Option<String>,
     pub ipv6: Option<String>,
-    pub port: u16,
+    pub port: Option<u16>,
     pub sponsor: Option<String>,
     pub country: Option<String>,
     pub ip_source: Option<String>,
@@ -48,6 +48,9 @@ impl HostFileCache {
     pub fn resolve(&self, designator: &str) -> Option<String> {
         let key = designator.to_uppercase();
         self.entries.get(&key).and_then(|entry| {
+            // Port is required for a valid address
+            let port = entry.port?;
+
             // Prefer IPv4, fall back to IPv6
             let ip = entry
                 .ipv4
@@ -58,9 +61,9 @@ impl HostFileCache {
             ip.map(|addr| {
                 if addr.contains(':') {
                     // IPv6 addresses must be wrapped in brackets for socket notation
-                    format!("[{}]:{}", addr, entry.port)
+                    format!("[{}]:{}", addr, port)
                 } else {
-                    format!("{}:{}", addr, entry.port)
+                    format!("{}:{}", addr, port)
                 }
             })
         })
