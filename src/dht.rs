@@ -137,7 +137,8 @@ impl DhtNode {
             // Configure the runner
             let mut config: opendht_sys::dht_runner_config = std::mem::zeroed();
             opendht_sys::dht_runner_config_default(&mut config);
-            config.dht_config.node_config.network = 0;
+            // Network 59973 is the ham-dht network used by mrefd reflectors
+            config.dht_config.node_config.network = 59973;
             config.dht_config.node_config.is_bootstrap = false;
             config.dht_config.node_config.maintain_storage = false;
             config.dht_config.id = identity;
