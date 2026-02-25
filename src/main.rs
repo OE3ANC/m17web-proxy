@@ -1,6 +1,7 @@
 
 mod config;
 mod dht;
+mod hostfile;
 mod websocket;
 mod utils;
 mod payloads;
@@ -11,8 +12,11 @@ use std::str;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use ezsockets::Server;
 
+use log::{debug, error, info, warn};
+
 use crate::config::Config;
 use crate::dht::{DhtNode, get_ref_address_from_dht};
+use crate::hostfile::{fetch_hostfile, resolve_from_hostfile, HostFileCache};
 use crate::payloads::{create_conn_payload, create_pong_payload};
 use crate::utils::decode_callsign;
 use crate::websocket::{M17ClientServer, WS_SESSIONS, WsPayload, ModuleInfo};
@@ -63,6 +67,9 @@ pub struct QsoMeta {
 #[tokio::main]
 async fn main() -> io::Result<()> {
 
+    // Initialize logging
+    env_logger::init();
+
     // WS Server instance
     let (server, _) = Server::create(|_server| M17ClientServer {});
     let listener = CFG.ws_listener_address.clone();
@@ -73,7 +80,7 @@ async fn main() -> io::Result<()> {
         CFG.callsign.clone()
     }.to_string();
 
-    println!("Callsign for proxy: {}", callsign);
+    info!("Callsign for proxy: {}", callsign);
 
     tokio::spawn(async move {
         ezsockets::tungstenite::run(server, listener).await.unwrap();
@@ -87,27 +94,49 @@ async fn main() -> io::Result<()> {
     // Bootstrap into the ham-dht network
     dht_node.bootstrap(&CFG.dht_bootstrap, &CFG.dht_port);
 
-    // Give the DHT node time to bootstrap and discover peers
-    println!("DHT: Waiting for bootstrap to complete...");
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    // Give the DHT node time to bootstrap and discover peers.
+    // While waiting, fetch the hostfile as a fallback source.
+    info!("DHT: Waiting for bootstrap to complete...");
+
+    let hostfile_future = fetch_hostfile(&CFG.hostfile_url);
+    let (hostfile_result, _) = tokio::join!(
+        hostfile_future,
+        tokio::time::sleep(Duration::from_secs(5))
+    );
+
+    let hostfile_cache: Option<HostFileCache> = match hostfile_result {
+        Ok(cache) => Some(cache),
+        Err(e) => {
+            warn!("Failed to fetch M17 hostfile: {} - hostfile fallback will not be available", e);
+            None
+        }
+    };
 
     for reflector in CFG.subscription.split(",") {
         let reflector_designator = reflector.split("_").next().unwrap().to_string();
 
-        // Resolve reflector address via DHT
+        // Resolve reflector address: try DHT first, then hostfile fallback
         let address = match get_ref_address_from_dht(&dht_node, &reflector_designator).await {
             Ok(addr) => {
-                println!("DHT: Resolved {} -> {}", reflector_designator, addr);
+                info!("DHT: Resolved {} -> {}", reflector_designator, addr);
                 addr
             }
             Err(e) => {
-                eprintln!("DHT: Failed to resolve {}: {}", reflector_designator, e);
-                continue;
+                warn!("DHT: Failed to resolve {}: {} - trying hostfile fallback", reflector_designator, e);
+
+                // Try hostfile fallback
+                match resolve_from_hostfile(&hostfile_cache, &reflector_designator) {
+                    Some(addr) => addr,
+                    None => {
+                        error!("Failed to resolve {} from both DHT and hostfile - skipping", reflector_designator);
+                        continue;
+                    }
+                }
             }
         };
 
         for module in reflector.split("_").last().unwrap().chars() {
-            println!("Subscribed to {} Module {}", reflector, module);
+            info!("Subscribed to {} Module {}", reflector, module);
             REFLECTOR_CONNECTIONS.lock().await.push(
                 ReflectorConnection {
                     reflector: reflector_designator.clone(),
@@ -164,14 +193,14 @@ async fn main() -> io::Result<()> {
 
                     match cmd {
                         "DISC" => {
-                            println!("We got disconnected!");
+                            warn!("We got disconnected!");
                             reflector_connection.last_heard = 0;
                         }
                         "ACKN" => {
-                            println!("We are linked!");
+                            info!("We are linked!");
                         }
                         "NACK" => {
-                            println!("We got denied! Waiting a minute before reconnecting...");
+                            warn!("We got denied! Waiting a minute before reconnecting...");
                             reflector_connection.last_heard = get_epoch().as_secs();
                         }, // Ignored for now -> mrefd sends ping anyway
                         "PING" => {
@@ -201,9 +230,9 @@ async fn main() -> io::Result<()> {
                                 // Codec 2 stream
                                 c2_data = buf[36..52].to_vec();
 
-                                println!("Packet src_call: {:?}", src_call);
-                                println!("Packet dst_call: {:?}", dst_call);
-                                println!("Voice data: {:x?}", &buf[..52])
+                                debug!("Packet src_call: {:?}", src_call);
+                                debug!("Packet dst_call: {:?}", dst_call);
+                                debug!("Voice data: {:x?}", &buf[..52])
 
                             } else {
 
@@ -218,9 +247,9 @@ async fn main() -> io::Result<()> {
                                 // Create a vector with all bytes up to and including the last non-zero byte
                                 pm_data = buf[35..(35 + last_non_zero - 2)].to_vec();
 
-                                println!("Packet src_call: {:?}", src_call);
-                                println!("Packet dst_call: {:?}", dst_call);
-                                println!("Packet data: {:x?}", &buf[..52]);
+                                debug!("Packet src_call: {:?}", src_call);
+                                debug!("Packet dst_call: {:?}", dst_call);
+                                debug!("Packet data: {:x?}", &buf[..52]);
 
                                 reflector_connection.messages.push( MsgData {
                                     callsign: src_call.clone(),
@@ -234,7 +263,7 @@ async fn main() -> io::Result<()> {
                             // Last frame 1st byte of last stream is always > 0x80
                             let mut is_last = false;
                             if buf[34] >= 0x80 {
-                                println!("Received last frame!");
+                                debug!("Received last frame!");
                                 is_last = true;
                             }
 
@@ -263,8 +292,7 @@ async fn main() -> io::Result<()> {
                             reflector_connection.active_qso_meta.timestamp = get_epoch().as_secs();
                         }
                         _ => {
-                            print!(" ");
-                            println!("{:x?}", &buf);
+                            debug!(" {:x?}", &buf);
                         }
                     }
                     break;
