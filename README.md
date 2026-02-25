@@ -2,18 +2,20 @@
 
 M17 web proxy that connects to M17 reflectors and streams audio/data to WebSocket clients.
 
-Reflector discovery uses the [ham-dht](https://github.com/n7tae/ham-dht-tools) distributed hash table network via [OpenDHT](https://github.com/savoirfairelinux/opendht), eliminating the need for centralized reflector list servers.
+Reflector discovery uses the [ham-dht](https://github.com/n7tae/ham-dht-tools) distributed hash table network via [OpenDHT](https://github.com/savoirfairelinux/opendht) as the primary method. When a reflector is not found on the DHT, the proxy falls back to the [RefCheck.Radio](https://refcheck.radio) M17 host file for address resolution.
 
 ## Configuration
 
 ### Environment variables:
-| Variable                    | Description                                                      | Default                 |
-|-----------------------------|------------------------------------------------------------------|-------------------------|
-| M17WEB_PROXY_CALLSIGN       | Callsign of the proxy                                            | SWLXXXXX                |
-| M17WEB_PROXY_LISTENER        | Address:Port to listen on                                        | 0.0.0.0:3000            |
-| M17WEB_PROXY_SUBSCRIPTION    | Format is *Designator*\_*Modules*\,*Designator*\_*Modules*\, ... | M17-XOR_ABC             |
-| M17WEB_PROXY_DHT_BOOTSTRAP   | Bootstrap node for the ham-dht network                           | xrf757.openquad.net     |
-| M17WEB_PROXY_DHT_PORT        | Port for the ham-dht bootstrap node                              | 17171                   |
+| Variable                    | Description                                                      | Default                                                  |
+|-----------------------------|------------------------------------------------------------------|----------------------------------------------------------|
+| M17WEB_PROXY_CALLSIGN       | Callsign of the proxy                                            | SWLXXXXX                                                 |
+| M17WEB_PROXY_LISTENER        | Address:Port to listen on                                        | 0.0.0.0:3000                                             |
+| M17WEB_PROXY_SUBSCRIPTION    | Format is *Designator*\_*Modules*\,*Designator*\_*Modules*\, ... | M17-XOR_ABC                                              |
+| M17WEB_PROXY_DHT_BOOTSTRAP   | Bootstrap node for the ham-dht network                           | xrf757.openquad.net                                      |
+| M17WEB_PROXY_DHT_PORT        | Port for the ham-dht bootstrap node                              | 17171                                                    |
+| M17WEB_PROXY_HOSTFILE_URL    | URL for the M17 reflector host file (fallback)                   | https://hostfiles.refcheck.radio/M17Hosts.json           |
+| RUST_LOG                     | Log level (e.g. `info`, `debug`, `warn`)                         | (unset — defaults to error)                              |
 
 ### Docker
 ```
@@ -53,9 +55,12 @@ cargo build --release
 
 At startup, the proxy:
 1. Initializes an OpenDHT node and bootstraps into the ham-dht network
-2. For each subscribed reflector (e.g., `M17-XOR`), queries the DHT for its published configuration
-3. Extracts the reflector's IPv4 address and port from the DHT response
+2. Fetches the M17 host file from RefCheck.Radio as a fallback data source (in parallel with DHT bootstrap)
+3. For each subscribed reflector (e.g., `M17-XOR`):
+   - First tries to resolve the address via DHT lookup
+   - If DHT lookup fails, falls back to the host file data
+   - Logs a warning when DHT fails and fallback is used
 4. Connects to each reflector module via UDP
 5. Streams received M17 voice/data frames to connected WebSocket clients
 
-The ham-dht network is a decentralized system where M17 reflectors publish their configuration directly. This means the proxy always gets current, accurate connection information without relying on any centralized server.
+The ham-dht network is a decentralized system where M17 reflectors publish their configuration directly. The host file from RefCheck.Radio serves as a fallback for reflectors that are not registered on the DHT or when the DHT bootstrap is not working.

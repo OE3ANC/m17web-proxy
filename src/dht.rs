@@ -1,5 +1,6 @@
 use std::ffi::{CStr, CString};
 
+use log::{error, info};
 use serde::Deserialize;
 use tokio::sync::oneshot;
 
@@ -89,7 +90,7 @@ unsafe extern "C" fn get_value_callback(
                 .as_ref()
                 .is_some_and(|existing| existing.timestamp >= config.timestamp);
             if !dominated {
-                println!(
+                info!(
                     "DHT: Found config for {} (v{}) at {}:{} (ts={})",
                     config.callsign, config.version, config.ipv4addr, config.port, config.timestamp
                 );
@@ -97,7 +98,7 @@ unsafe extern "C" fn get_value_callback(
             }
         }
         Err(e) => {
-            eprintln!("DHT: Failed to deserialize mrefd config: {}", e);
+            error!("DHT: Failed to deserialize mrefd config: {}", e);
         }
     }
 
@@ -113,7 +114,7 @@ unsafe extern "C" fn get_done_callback(ok: bool, user_data: *mut libc::c_void) {
     let data = Box::from_raw(user_data as *mut GetCallbackData);
 
     if !ok {
-        eprintln!("DHT: get() operation failed");
+        error!("DHT: get() operation failed");
     }
 
     if let Some(tx) = data.done_tx {
@@ -165,7 +166,7 @@ impl DhtNode {
             opendht_sys::dht_runner_bootstrap(self.runner, host_c.as_ptr(), port_c.as_ptr());
         }
 
-        println!("DHT: Bootstrapping to {}:{}", host, port);
+        info!("DHT: Bootstrapping to {}:{}", host, port);
     }
 
     /// Query the DHT for a reflector's configuration.
@@ -194,7 +195,7 @@ impl DhtNode {
                 designator_bytes.len(),
             );
 
-            println!(
+            info!(
                 "DHT: Querying for {} (hash: {})",
                 designator_upper,
                 CStr::from_ptr(opendht_sys::dht_infohash_print(&hash))

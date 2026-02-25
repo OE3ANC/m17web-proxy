@@ -11,4 +11,6 @@ pub struct Config {
     pub dht_bootstrap: String,
     #[envconfig(from = "M17WEB_PROXY_DHT_PORT", default = "17171")]
     pub dht_port: String,
+    #[envconfig(from = "M17WEB_PROXY_HOSTFILE_URL", default = "https://hostfiles.refcheck.radio/M17Hosts.json")]
+    pub hostfile_url: String,
 }

@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use async_trait::async_trait;
 use ezsockets::{CloseFrame, Error, Request, Socket, Utf8Bytes};
 use lazy_static::lazy_static;
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use crate::{get_module_infos, MsgData};
@@ -77,7 +78,7 @@ impl ezsockets::ServerExt for M17ClientServer {
 
         match request.uri().path() {
             "/" => {
-                println!("WS_CONNECTION {} connected as info client from {}", id, address);
+                info!("WS_CONNECTION {} connected as info client from {}", id, address);
                 // Send init module info
                 session.text(serde_json::to_string(&get_module_infos().await).unwrap()).unwrap();
                 is_info = true;
@@ -89,7 +90,7 @@ impl ezsockets::ServerExt for M17ClientServer {
                 sub_ref = path.next().unwrap();
                 sub_mod = path.next().unwrap();
 
-                println!("WS_CONNECTION {} connected as stream client from {} subscribing Reflector {} Module {}", id, address, sub_ref, sub_mod);
+                info!("WS_CONNECTION {} connected as stream client from {} subscribing Reflector {} Module {}", id, address, sub_ref, sub_mod);
                 is_info = false;
             }
         }
@@ -117,7 +118,7 @@ impl ezsockets::ServerExt for M17ClientServer {
         _reason: Result<Option<CloseFrame>, Error>,
     ) -> Result<(), Error> {
         let index = WS_SESSIONS.lock().await.iter().position(|x| x.ws_session.id == id).unwrap();
-        println!("WS_SESSION {} disconnected", index);
+        info!("WS_SESSION {} disconnected", index);
         WS_SESSIONS.lock().await.remove(index);
         Ok(())
     }
@@ -139,13 +140,13 @@ impl ezsockets::SessionExt for WebSocketClientSession {
 
     async fn on_text(&mut self, text: Utf8Bytes) -> Result<(), Error> {
         let payload: ClientSubscription = serde_json::from_str(&text).unwrap();
-        println!("New subscription to stream from WS_CONNECTION {}: Reflector {} Module {}", self.id, payload.reflector.clone(), payload.module.clone());
+        info!("New subscription to stream from WS_CONNECTION {}: Reflector {} Module {}", self.id, payload.reflector.clone(), payload.module.clone());
 
         let mut ws_sessions = WS_SESSIONS.lock().await;
         for session in ws_sessions.iter_mut() {
             if session.ws_session.id == self.id {
                 if session.info_connection {
-                    println!("Stream subscription with info client failed!")
+                    warn!("Stream subscription with info client failed!")
                 } else {
                     session.subscription.reflector = payload.reflector.clone();
                     session.subscription.module = payload.module.clone();
@@ -158,4 +159,3 @@ impl ezsockets::SessionExt for WebSocketClientSession {
     async fn on_binary(&mut self, _bytes: ezsockets::Bytes) -> Result<(), Error> { unimplemented!() }
     async fn on_call(&mut self, _call: Self::Call) -> Result<(), Error> { unimplemented!() }
 }
-
