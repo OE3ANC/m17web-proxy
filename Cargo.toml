@@ -5,14 +5,14 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "1.37.0", features = ["full"] }
-ezsockets = { version = "0.7.0", features = ["tungstenite"] }
-lazy_static = "1.4.0"
-async-trait = "0.1.80"
-serde = { version = "1.0.197", features = ["derive"] }
-serde_json = "1.0.115"
-envconfig = "0.11.0"
-rand = "0.9.0"
+tokio = { version = "1.51.0", features = ["full"] }
+ezsockets = { version = "0.7.1", features = ["tungstenite"] }
+lazy_static = "1.5.0"
+async-trait = "0.1.89"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+envconfig = "0.11.1"
+rand = "0.9.2"
 opendht-sys = "1.0.1"
 libc = "0.2"
 rmp-serde = "1.3"
