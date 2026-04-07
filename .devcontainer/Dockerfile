@@ -6,6 +6,7 @@ LABEL authors="oe3anc"
 RUN apt update && apt install -y \
     curl \
     git \
+    git-lfs \
     build-essential \
     pkg-config \
     libssl-dev \
