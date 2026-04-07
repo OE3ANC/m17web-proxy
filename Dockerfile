@@ -12,26 +12,18 @@ RUN apt update && apt install -y \
     libclang-dev \
     clang \
     libopendht-dev \
-    libopendht-c-dev
-
-RUN mkdir -p /app/tmp/
-COPY --chown=1000:1000 . /app/tmp/
-
-WORKDIR /app/tmp/
-
-USER 1000:1000
-
-# Get Rust
-RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
-ENV PATH="/home/ubuntu/.cargo/bin:${PATH}"
-
-RUN cargo build --release
-
-RUN cp /app/tmp/target/release/m17web-proxy /app/m17web-proxy
+    libopendht-c-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-RUN rm -rf ./tmp/
+COPY . .
+
+RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+RUN cargo build --release
+
 
 FROM ubuntu:24.04
 
@@ -41,8 +33,8 @@ RUN apt update && apt install -y \
     libopendht-c3t64 \
     && rm -rf /var/lib/apt/lists/*
 
-USER 1000:1000
+COPY --from=build /app/target/release/m17web-proxy /app/m17web-proxy
 
-COPY --chown=1000:1000 --from=build /app/* /app/
+USER 1000:1000
 
 ENTRYPOINT ["/app/m17web-proxy"]
