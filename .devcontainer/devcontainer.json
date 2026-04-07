@@ -1,0 +1,6 @@
+{
+  "name": "m17web-proxy",
+  "build": {
+    "dockerfile": "./Dockerfile"
+  }
+}
