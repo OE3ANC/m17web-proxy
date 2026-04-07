@@ -23,7 +23,7 @@ USER 1000:1000
 
 # Get Rust
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
-ENV PATH="$HOME/.cargo/bin:${PATH}"
+ENV PATH="/home/ubuntu/.cargo/bin:${PATH}"
 
 RUN cargo build --release
 
