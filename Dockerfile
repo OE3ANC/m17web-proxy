@@ -23,6 +23,8 @@ USER 1000:1000
 
 # Get Rust
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
+ENV PATH="$HOME/.cargo/bin:${PATH}"
+
 RUN cargo build --release
 
 RUN cp /app/tmp/target/release/m17web-proxy /app/m17web-proxy
